@@ -1,2 +1,0 @@
-bambdino = true
-janosch = true
