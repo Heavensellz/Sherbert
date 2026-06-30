@@ -2,7 +2,7 @@ const http = require('http');
 const WebSocket = require('ws');
 
 const MAX_SLOTS_PER_GROUP = 4;
-const VALID_SLOTS = ['account1', 'account2', 'account3', 'account4'];
+const VALID_SLOTS = ['account1', 'account2', 'account3'];
 const HEARTBEAT_INTERVAL_MS = 10000;
 
 // groups: Map<groupPassword, Map<slot, ws>>
