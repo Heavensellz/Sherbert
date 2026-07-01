@@ -2,8 +2,8 @@ const http = require('http');
 const WebSocket = require('ws');
 
 const MAX_SLOTS_PER_GROUP = 4;
-const VALID_SLOTS = ['account1', 'account2', 'account3'];
-const HEARTBEAT_INTERVAL_MS = 10000;
+const VALID_SLOTS = ['account1', 'account2', 'account3', 'account4'];
+const HEARTBEAT_INTERVAL_MS = 5000; // now checks every 5 seconds
 
 // groups: Map<groupPassword, Map<slot, ws>>
 const groups = new Map();
@@ -73,6 +73,15 @@ wss.on('connection', (ws) => {
 
             case 'getClients': {
                 sendClientList(ws);
+                break;
+            }
+
+            case 'pong': {
+                // Application-level heartbeat reply (see setInterval below).
+                // Useful for clients whose WebSocket implementation doesn't
+                // transparently answer protocol-level ping/pong frames
+                // (e.g. some Roblox WebSocket libraries).
+                ws.isAlive = true;
                 break;
             }
 
@@ -271,15 +280,21 @@ function generateClientId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
+// Every HEARTBEAT_INTERVAL_MS, ping every connected client.
+// If a client didn't respond with a pong since the last check, it's
+// considered dead: we terminate it, and let the 'close' handler (above)
+// do the actual group cleanup + broadcast so there's exactly one code
+// path responsible for removing a client from its group.
 setInterval(() => {
     wss.clients.forEach((ws) => {
         if (!ws.isAlive) {
-            console.log(`⚠️ Terminating unresponsive client: ${ws.clientName || 'Anonymous'}`);
-            removeFromGroup(ws);
-            return ws.terminate();
+            console.log(`⚠️ No heartbeat response — terminating: ${ws.clientName || 'Anonymous'} (group: ${ws.clientGroup}, slot: ${ws.clientSlot})`);
+            ws.terminate(); // triggers 'close', which handles removeFromGroup + broadcastClientList
+            return;
         }
         ws.isAlive = false;
-        ws.ping();
+        ws.ping(); // protocol-level ping (handled automatically by browsers / the `ws` lib)
+        ws.send(JSON.stringify({ type: 'ping' })); // app-level ping (client must reply { type: 'pong' })
     });
 }, HEARTBEAT_INTERVAL_MS);
 
